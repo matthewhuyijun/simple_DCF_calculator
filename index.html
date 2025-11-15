@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>DCF 估值小工具</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      color-scheme: dark;
+      --bg: #05060a;
+      --panel: #10121a;
+      --panel-soft: #171a24;
+      --accent: #4f8cff;
+      --accent-soft: rgba(79, 140, 255, 0.1);
+      --border-subtle: #252836;
+      --text-main: #f5f5f7;
+      --text-muted: #a0a4b8;
+      --danger: #ff5c5c;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      height: 100vh;
+      background: radial-gradient(circle at top, #20263a 0, #05060a 55%);
+      color: var(--text-main);
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      padding: 16px;
+      overflow: hidden;
+    }
+
+    .app {
+      max-width: 1200px;
+      width: 100%;
+      max-height: calc(100vh - 32px);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(0, 0, 0, 0.7));
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      box-shadow: 0 22px 70px rgba(0, 0, 0, 0.65);
+      padding: 20px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      overflow: auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding-bottom: 10px;
+    }
+
+    .title-block h1 {
+      margin: 0;
+      font-size: 1.6rem;
+      letter-spacing: 0.03em;
+    }
+
+    .title-block p {
+      margin: 4px 0 0;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .tag {
+      display: none;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      gap: 18px;
+    }
+
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      background: var(--panel);
+      border-radius: 14px;
+      padding: 14px 14px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 1rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    /* 控制区 */
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .control-row {
+      display: grid;
+      grid-template-columns: minmax(0, 2.4fr) minmax(0, 3.5fr) minmax(80px, 1.4fr);
+      align-items: center;
+      gap: 8px;
+      padding: 8px 8px;
+      border-radius: 10px;
+      background: var(--panel-soft);
+      border: 1px solid var(--border-subtle);
+      transition: border-color 0.2s ease;
+    }
+
+    @media (max-width: 700px) {
+      .control-row {
+        grid-template-columns: minmax(0, 1.8fr) minmax(0, 2.2fr) minmax(72px, 1.6fr);
+      }
+    }
+
+    .control-row.show-bounds {
+      border-color: var(--accent);
+    }
+
+    .control-label-main {
+      font-size: 0.92rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .control-label-main span.symbol {
+      font-weight: 600;
+    }
+
+    .control-label-main span.desc {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .slider {
+      width: 100%;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      border-radius: 999px;
+      background: #262b3b;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid #ffffff;
+      margin-top: -5px;
+      box-shadow: 0 0 0 4px var(--accent-soft);
+      cursor: pointer;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 0 4px var(--accent-soft);
+      cursor: pointer;
+    }
+
+    .number-input {
+      position: relative;
+    }
+
+    .number-input input[type="number"] {
+      width: 100%;
+      padding: 5px 6px;
+      border-radius: 8px;
+      border: 1px solid var(--border-subtle);
+      background: #070812;
+      color: var(--text-main);
+      font-size: 0.8rem;
+    }
+
+    .number-input input[type="number"]:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(79, 140, 255, 0.6);
+    }
+
+    .range-bounds {
+      display: none;
+      grid-column: 1 / -1;
+      margin-top: 6px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      overflow-x: auto;
+    }
+
+    .control-row.show-bounds .range-bounds {
+      display: flex;
+      gap: 10px;
+      flex-wrap: nowrap;
+    }
+
+    .bound-field {
+      flex: 1 1 0;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 4px 8px;
+      white-space: nowrap;
+    }
+
+    .bound-field span {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+    }
+
+    .bound-field input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      color: var(--text-main);
+      font-size: 0.76rem;
+    }
+
+    .bound-field input:focus {
+      outline: none;
+    }
+
+    .hint-unit {
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .control-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 8px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .control-footer button {
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      padding: 4px 10px;
+      background: rgba(255, 255, 255, 0.02);
+      color: var(--text-main);
+      font-size: 0.75rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .control-footer button:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    /* 右侧结果区 */
+    .results-grid {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 10px;
+      height: 100%;
+    }
+
+    .summary-card {
+      background: radial-gradient(circle at top left, rgba(79, 140, 255, 0.25), rgba(0, 0, 0, 0.9));
+      border-radius: 12px;
+      padding: 14px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .summary-main-title {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .summary-value {
+      font-size: 2.1rem;
+      font-weight: 650;
+      margin-top: 4px;
+    }
+
+    .summary-sub {
+      margin-top: 6px;
+      font-size: 0.8rem;
+      color: rgba(240, 240, 250, 0.8);
+    }
+
+    .summary-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+      font-size: 0.74rem;
+    }
+
+    .summary-badges span {
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .summary-secondary {
+      text-align: right;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .warning-text {
+      margin-top: 6px;
+      color: var(--danger);
+      font-size: 0.78rem;
+    }
+
+    /* 变量说明 */
+    .explain-card {
+      background: var(--panel-soft);
+      border-radius: 12px;
+      padding: 12px;
+      border: 1px solid var(--border-subtle);
+      font-size: 0.8rem;
+    }
+
+    .explain-card h3 {
+      margin: 0 0 6px;
+      font-size: 0.86rem;
+      color: var(--text-muted);
+    }
+
+    .var-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 6px;
+    }
+
+    .var-list li {
+      display: flex;
+      gap: 6px;
+      align-items: flex-start;
+    }
+
+    .var-symbol {
+      width: 56px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .var-desc {
+      color: var(--text-muted);
+      flex: 1;
+    }
+
+    /* （现金流明细表已删除） */
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="title-block">
+        <h1>DCF 现金流折现估值小工具</h1>
+        <p>基于现金流折现模型（Discounted Cash Flow），通过可调参数直观感受估值对假设的敏感性。</p>
+      </div>
+      
+    </header>
+
+    <div class="layout">
+      <!-- 左侧：控制区 -->
+      <section class="panel">
+        <h2>参数输入</h2>
+        <div class="controls">
+          <!-- n 年数 -->
+          <div class="control-row">
+            <div class="control-label-main">
+              <span class="symbol">n · 预测年数</span>
+              <span class="desc">从第 1 年到第 n 年的显式预测区间。</span>
+            </div>
+            <div class="slider">
+              <input id="n-range" type="range" min="1" max="25" step="1" value="10" />
+            </div>
+            <div class="number-input">
+              <input id="n-input" type="number" min="1" max="25" step="1" value="10" />
+              <span class="hint-unit">年</span>
+            </div>
+            <div class="range-bounds" data-target="n" data-default-min="1" data-default-max="25">
+              <div class="bound-field">
+                <span>最小</span>
+                <input type="number" step="1" value="1" data-bound="min" />
+              </div>
+              <div class="bound-field">
+                <span>最大</span>
+                <input type="number" step="1" value="25" data-bound="max" />
+              </div>
+            </div>
+          </div>
+
+          <!-- r 贴现率 -->
+          <div class="control-row">
+            <div class="control-label-main">
+              <span class="symbol">r · 贴现率</span>
+              <span class="desc">反映资金时间价值和风险，通常为预期收益率或资本成本。</span>
+            </div>
+            <div class="slider">
+              <input id="r-range" type="range" min="0.02" max="0.3" step="0.005" value="0.12" />
+            </div>
+            <div class="number-input">
+              <input id="r-input" type="number" min="0.02" max="0.3" step="0.005" value="0.12" />
+              <span class="hint-unit">小数</span>
+            </div>
+            <div class="range-bounds" data-target="r" data-default-min="0.02" data-default-max="0.3" data-default-step="0.005">
+              <div class="bound-field">
+                <span>最小</span>
+                <input type="number" step="0.005" value="0.02" data-bound="min" />
+              </div>
+              <div class="bound-field">
+                <span>最大</span>
+                <input type="number" step="0.005" value="0.30" data-bound="max" />
+              </div>
+              <div class="bound-field">
+                <span>增量</span>
+                <input type="number" step="0.001" value="0.005" data-bound="step" min="0.0001" />
+              </div>
+            </div>
+          </div>
+
+          <!-- g_f 显式期增长率 -->
+          <div class="control-row">
+            <div class="control-label-main">
+              <span class="symbol">g<sub>f</sub> · 显式期现金流增长率</span>
+              <span class="desc">显式期内每年现金流的预期增长比例，可为负。</span>
+            </div>
+            <div class="slider">
+              <input id="g-exp-range" type="range" min="-0.1" max="0.3" step="0.005" value="0.08" />
+            </div>
+            <div class="number-input">
+              <input id="g-exp-input" type="number" min="-0.1" max="0.3" step="0.005" value="0.08" />
+              <span class="hint-unit">小数</span>
+            </div>
+            <div class="range-bounds" data-target="g-exp" data-default-min="-0.1" data-default-max="0.3" data-default-step="0.005">
+              <div class="bound-field">
+                <span>最小</span>
+                <input type="number" step="0.005" value="-0.10" data-bound="min" />
+              </div>
+              <div class="bound-field">
+                <span>最大</span>
+                <input type="number" step="0.005" value="0.30" data-bound="max" />
+              </div>
+              <div class="bound-field">
+                <span>增量</span>
+                <input type="number" step="0.001" value="0.005" data-bound="step" min="0.0001" />
+              </div>
+            </div>
+          </div>
+
+          <!-- g_t 终值增长率 -->
+          <div class="control-row">
+            <div class="control-label-main">
+              <span class="symbol">g<sub>t</sub> · 终值增长率</span>
+              <span class="desc">用于估算第 n 年之后长期稳定增长阶段的现金流。</span>
+            </div>
+            <div class="slider">
+              <input id="g-term-range" type="range" min="-0.05" max="0.1" step="0.002" value="0.03" />
+            </div>
+            <div class="number-input">
+              <input id="g-term-input" type="number" min="-0.05" max="0.1" step="0.002" value="0.03" />
+              <span class="hint-unit">小数</span>
+            </div>
+            <div class="range-bounds" data-target="g-term" data-default-min="-0.05" data-default-max="0.1" data-default-step="0.002">
+              <div class="bound-field">
+                <span>最小</span>
+                <input type="number" step="0.002" value="-0.05" data-bound="min" />
+              </div>
+              <div class="bound-field">
+                <span>最大</span>
+                <input type="number" step="0.002" value="0.10" data-bound="max" />
+              </div>
+              <div class="bound-field">
+                <span>增量</span>
+                <input type="number" step="0.001" value="0.002" data-bound="step" min="0.0001" />
+              </div>
+            </div>
+          </div>
+
+          <!-- FCF1 初始现金流 -->
+          <!-- FCF1 初始现金流 -->
+          <div class="control-row">
+            <div class="control-label-main">
+              <span class="symbol">FCF₁ · 第 1 年自由现金流</span>
+              <span class="desc">单位自定（如万元、百万等），整体估值将按相同单位表示。</span>
+            </div>
+            <div class="slider">
+              <input id="fcf-range" type="range" min="0" max="20" step="0.1" value="1" />
+            </div>
+            <div class="number-input">
+              <input id="fcf-input" type="number" min="0" max="20" step="0.1" value="1" />
+              <span class="hint-unit">单位</span>
+            </div>
+            <div class="range-bounds" data-target="fcf" data-default-min="0" data-default-max="20" data-default-step="0.1" data-min-zero="true">
+              <div class="bound-field">
+                <span>最小</span>
+                <input type="number" step="0.5" value="0" data-bound="min" min="0" />
+              </div>
+              <div class="bound-field">
+                <span>最大</span>
+                <input type="number" step="0.5" value="20" data-bound="max" />
+              </div>
+              <div class="bound-field">
+                <span>增量</span>
+                <input type="number" step="0.1" value="0.1" data-bound="step" min="0.01" />
+              </div>
+            </div>
+          </div>
+
+          <div class="control-footer">
+            <span>提示：g<sub>t</sub> 一般不应大于 r，否则终值会发散。</span>
+            <button id="reset-btn" type="button">重置为默认值</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 右侧：结果区 -->
+      <section class="panel">
+        <h2>估值结果与说明</h2>
+        <div class="results-grid">
+          <!-- 总结卡片 -->
+          <div class="summary-card">
+            <div>
+              <div class="summary-main-title">估算现值 PV</div>
+              <div id="p-value" class="summary-value">0.00</div>
+              <div class="summary-sub">基于当前参数计算得到的企业价值（Present Value，单位与 FCF₁ 相同）。</div>
+              <div class="summary-badges">
+                <span id="badge-n">n = 10 年</span>
+                <span id="badge-r">r = 12.0%</span>
+                <span id="badge-g-exp">g<sub>f</sub> = 8.0%</span>
+                <span id="badge-g-term">g<sub>t</sub> = 3.0%</span>
+                <span id="badge-fcf">FCF₁ = 1.00</span>
+              </div>
+            </div>
+            <div class="summary-secondary">
+              <div id="warning" class="warning-text" style="display:none;"></div>
+            </div>
+          </div>
+
+          <!-- 变量说明 -->
+          <div class="explain-card">
+            <h3>变量含义</h3>
+            <ul class="var-list">
+              <li><span class="var-symbol">PV</span><span class="var-desc">资产或投资的现值（Present Value），即模型估值结果。</span></li>
+              <li><span class="var-symbol">FCF<sub>1</sub></span><span class="var-desc">第 1 年自由现金流（Free Cash Flow in year 1）。</span></li>
+              <li><span class="var-symbol">g<sub>f</sub></span><span class="var-desc">显式预测期自由现金流增长率。</span></li>
+              <li><span class="var-symbol">r</span><span class="var-desc">贴现率（常用加权平均资本成本 WACC）。</span></li>
+              <li><span class="var-symbol">g<sub>t</sub></span><span class="var-desc">终值增长率（Gordon Growth Rate）。</span></li>
+              <li><span class="var-symbol">t</span><span class="var-desc">年份索引，取值从 1 到 n。</span></li>
+            </ul>
+          </div>
+
+          <!-- （现金流明细表已删除） -->
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    function toNumber(value, fallback) {
+      var n = parseFloat(value);
+      return isNaN(n) ? fallback : n;
+    }
+
+    function formatNumber(num, fractionDigits) {
+      if (!isFinite(num)) return "—";
+      return num.toLocaleString("zh-CN", {
+        minimumFractionDigits: fractionDigits,
+        maximumFractionDigits: fractionDigits,
+      });
+    }
+
+    function stepValueOf(el) {
+      var parsed = parseFloat(el.step);
+      return isNaN(parsed) || parsed === 0 ? 1 : parsed;
+    }
+
+    const nRange = document.getElementById("n-range");
+    const nInput = document.getElementById("n-input");
+    const rRange = document.getElementById("r-range");
+    const rInput = document.getElementById("r-input");
+    const gExpRange = document.getElementById("g-exp-range");
+    const gExpInput = document.getElementById("g-exp-input");
+    const gTermRange = document.getElementById("g-term-range");
+    const gTermInput = document.getElementById("g-term-input");
+    const fcfRange = document.getElementById("fcf-range");
+    const fcfInput = document.getElementById("fcf-input");
+
+    const pValueEl = document.getElementById("p-value");
+    const warningEl = document.getElementById("warning");
+
+    const badgeN = document.getElementById("badge-n");
+    const badgeR = document.getElementById("badge-r");
+    const badgeGExp = document.getElementById("badge-g-exp");
+    const badgeGTerm = document.getElementById("badge-g-term");
+    const badgeFcf = document.getElementById("badge-fcf");
+
+    const resetBtn = document.getElementById("reset-btn");
+    const controlRows = document.querySelectorAll(".control-row");
+    const rangeBoundGroups = document.querySelectorAll(".range-bounds");
+    const boundControllers = {};
+
+    function openBoundsRow(targetRow) {
+      controlRows.forEach(function (row) {
+        if (row === targetRow) {
+          row.classList.add("show-bounds");
+        } else {
+          row.classList.remove("show-bounds");
+        }
+      });
+    }
+
+    controlRows.forEach(function (row) {
+      var sliderEl = row.querySelector('.slider input[type="range"]');
+      if (!sliderEl) return;
+
+      sliderEl.addEventListener("pointerdown", function (evt) {
+        evt.stopPropagation();
+        openBoundsRow(row);
+      });
+
+      sliderEl.addEventListener("input", function () {
+        openBoundsRow(row);
+      });
+
+      var numericEl = row.querySelector('.number-input input[type="number"]');
+      if (numericEl) {
+        numericEl.addEventListener("focus", function () {
+          openBoundsRow(row);
+        });
+      }
+    });
+
+    document.addEventListener("click", function (evt) {
+      if (evt.target.closest(".control-row")) return;
+      controlRows.forEach(function (row) {
+        row.classList.remove("show-bounds");
+      });
+    });
+
+    rangeBoundGroups.forEach(function (group) {
+      var target = group.dataset.target;
+      var sliderEl = document.getElementById(target + "-range");
+      var inputEl = document.getElementById(target + "-input");
+      if (!sliderEl || !inputEl) return;
+      var minField = group.querySelector('input[data-bound="min"]');
+      var maxField = group.querySelector('input[data-bound="max"]');
+      var stepField = group.querySelector('input[data-bound="step"]');
+      var defaults = {
+        min: toNumber(group.dataset.defaultMin, parseFloat(sliderEl.min)),
+        max: toNumber(group.dataset.defaultMax, parseFloat(sliderEl.max)),
+        step: toNumber(group.dataset.defaultStep, stepValueOf(sliderEl)),
+      };
+      var enforceNonNegative = group.dataset.minZero === "true";
+
+      function updateBounds(evt, override) {
+        var minVal =
+          override && typeof override.min === "number"
+            ? override.min
+            : toNumber(minField.value, defaults.min);
+        var maxVal =
+          override && typeof override.max === "number"
+            ? override.max
+            : toNumber(maxField.value, defaults.max);
+        var stepVal =
+          override && typeof override.step === "number"
+            ? override.step
+            : toNumber(stepField ? stepField.value : defaults.step, defaults.step);
+
+        if (enforceNonNegative) {
+          if (minVal < 0) minVal = 0;
+          if (maxVal < 0) maxVal = defaults.max;
+        }
+
+        if (minVal > maxVal) {
+          var temp = minVal;
+          minVal = maxVal;
+          maxVal = temp;
+        }
+
+        if (!isFinite(stepVal) || stepVal <= 0) {
+          stepVal = defaults.step;
+        }
+
+        if (minVal === maxVal) {
+          var adjust = stepVal;
+          if (evt && evt.target === minField) {
+            minVal = maxVal - adjust;
+          } else {
+            maxVal = minVal + adjust;
+          }
+        }
+
+        if (enforceNonNegative) {
+          if (minVal < 0) minVal = 0;
+          if (maxVal < 0) maxVal = defaults.max;
+          if (maxVal < minVal) maxVal = minVal + stepVal;
+        }
+
+        sliderEl.min = minVal;
+        sliderEl.max = maxVal;
+        sliderEl.step = stepVal;
+        inputEl.min = minVal;
+        inputEl.max = maxVal;
+        inputEl.step = stepVal;
+
+        minField.value = minVal;
+        maxField.value = maxVal;
+        if (stepField) stepField.value = stepVal;
+
+        var current = toNumber(inputEl.value, minVal);
+        if (current < minVal) current = minVal;
+        if (current > maxVal) current = maxVal;
+        current = +current.toFixed(4);
+
+        sliderEl.value = current;
+        inputEl.value = current;
+        recalc();
+      }
+
+      if (minField) {
+        minField.addEventListener("change", updateBounds);
+        minField.addEventListener("blur", updateBounds);
+      }
+      if (maxField) {
+        maxField.addEventListener("change", updateBounds);
+        maxField.addEventListener("blur", updateBounds);
+      }
+      if (stepField) {
+        stepField.addEventListener("change", updateBounds);
+        stepField.addEventListener("blur", updateBounds);
+      }
+
+      boundControllers[target] = {
+        updateBounds: updateBounds,
+        defaults: defaults,
+      };
+
+      updateBounds(null, defaults);
+    });
+
+    function syncPair(rangeEl, inputEl, isInteger) {
+      function sanitize() {
+        var v = inputEl.value;
+        if (v === "") {
+          inputEl.value = rangeEl.value;
+          return;
+        }
+        if (isInteger) {
+          var numInt = Math.round(toNumber(v, 0));
+          var minInt = parseInt(rangeEl.min, 10);
+          var maxInt = parseInt(rangeEl.max, 10);
+          if (numInt < minInt) numInt = minInt;
+          if (numInt > maxInt) numInt = maxInt;
+          inputEl.value = numInt;
+          rangeEl.value = numInt;
+        } else {
+          var num = toNumber(v, 0);
+          var minF = parseFloat(rangeEl.min);
+          var maxF = parseFloat(rangeEl.max);
+          if (num < minF) num = minF;
+          if (num > maxF) num = maxF;
+          num = +num.toFixed(4);
+          inputEl.value = num;
+          rangeEl.value = num;
+        }
+      }
+
+      rangeEl.addEventListener("input", function () {
+        inputEl.value = rangeEl.value;
+        recalc();
+      });
+
+      inputEl.addEventListener("input", function () {
+        recalc();
+      });
+
+      inputEl.addEventListener("change", function () {
+        sanitize();
+        recalc();
+      });
+
+      inputEl.addEventListener("blur", function () {
+        sanitize();
+        recalc();
+      });
+    }
+
+    syncPair(nRange, nInput, true);
+    syncPair(rRange, rInput, false);
+    syncPair(gExpRange, gExpInput, false);
+    syncPair(gTermRange, gTermInput, false);
+    syncPair(fcfRange, fcfInput, false);
+
+    resetBtn.addEventListener("click", function () {
+      nRange.value = nInput.value = 10;
+      rRange.value = rInput.value = 0.12;
+      gExpRange.value = gExpInput.value = 0.08;
+      gTermRange.value = gTermInput.value = 0.03;
+      fcfRange.value = fcfInput.value = 1;
+
+      ["n", "r", "g-exp", "g-term", "fcf"].forEach(function (key) {
+        if (!boundControllers[key]) return;
+        boundControllers[key].updateBounds(null, boundControllers[key].defaults);
+      });
+
+      recalc();
+    });
+
+    function recalc() {
+      var n = parseInt(nInput.value, 10) || 0;
+      var r = toNumber(rInput.value, 0);
+      var gExplicit = toNumber(gExpInput.value, 0);
+      var gTerminal = toNumber(gTermInput.value, 0);
+      var fcf = toNumber(fcfInput.value, 0);
+
+      badgeN.textContent = "n = " + n + " 年";
+      badgeR.textContent = "r = " + (r * 100).toFixed(1) + "%";
+      badgeGExp.innerHTML = "g<sub>f</sub> = " + (gExplicit * 100).toFixed(1) + "%";
+      badgeGTerm.innerHTML = "g<sub>t</sub> = " + (gTerminal * 100).toFixed(1) + "%";
+      badgeFcf.textContent = "FCF₁ = " + formatNumber(fcf, 2);
+
+      var pvExplicit = 0;
+      if (n > 0) {
+        for (var t = 1; t <= n; t++) {
+          var cf = fcf * Math.pow(1 + gExplicit, t);
+          var discFactor = Math.pow(1 + r, -t);
+          pvExplicit += cf * discFactor;
+        }
+      }
+
+      var warningMsg = "";
+      var tvN = 0;
+      var pvTerminal = 0;
+
+      if (n > 0 && r > gTerminal) {
+        var cfN = fcf * Math.pow(1 + gExplicit, n);
+        tvN = (cfN * (1 + gTerminal)) / (r - gTerminal);
+        pvTerminal = tvN / Math.pow(1 + r, n);
+      } else if (n === 0) {
+        warningMsg = "n = 0 时，没有显式预测期，也无法计算终值。";
+      } else if (r <= gTerminal) {
+        warningMsg = "要求贴现率 r > 终值增长率 g<sub>t</sub>，才能使用终值公式。当前 r ≤ g<sub>t</sub>，终值部分已忽略。";
+      }
+
+      var p = pvExplicit + pvTerminal;
+      pValueEl.textContent = formatNumber(p, 4);
+
+      if (warningMsg) {
+        warningEl.style.display = "block";
+        warningEl.innerHTML = warningMsg;
+      } else {
+        warningEl.style.display = "none";
+      }
+    }
+
+    recalc();
+
+  </script>
+</body>
+</html>
